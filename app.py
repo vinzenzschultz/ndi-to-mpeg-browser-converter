@@ -2,11 +2,12 @@ import cv2
 import numpy as np
 import NDIlib as ndi
 from flask import Flask, Response, render_template, request, jsonify
+import time
 
 app = Flask(__name__)
 
 if not ndi.initialize():
-    raise RuntimeError("NDI konnte nicht initialisiert werden!")
+    raise RuntimeError("NDI konnte nicht initialisiert werden")
 
 def get_ndi_sources():
     find = ndi.find_create_v2()
@@ -21,17 +22,17 @@ def index():
 
 def ndi_receiver(source, is_ip=False):
     if not ndi.initialize():
-        raise RuntimeError("NDI konnte nicht initialisiert werden!")
+        raise RuntimeError("NDI konnte nicht initialisiert werden")
 
     recv_create = ndi.RecvCreateV3()
     recv_create.color_format = ndi.RECV_COLOR_FORMAT_BGRX_BGRA
     recv = ndi.recv_create_v3(recv_create)
 
     if recv is None:
-        raise RuntimeError("NDI-Empfänger konnte nicht erstellt werden!")
+        raise RuntimeError("NDI-Empfänger konnte nicht erstellt werden")
 
     if is_ip:
-        ndi.recv_connect(recv, f"NDI Quelle {source}")
+        ndi.recv_connect(recv, f"NDI Source {source}")
     else:
         sources = get_ndi_sources()
         selected_source = next((src for src in sources if src.ndi_name == source), None)
@@ -42,17 +43,25 @@ def ndi_receiver(source, is_ip=False):
 
         ndi.recv_connect(recv, selected_source)
 
+    last_valid_frame = None
+
     while True:
         frame_type, video_data, _, _ = ndi.recv_capture_v2(recv, 5000)
 
-        if frame_type != ndi.FRAME_TYPE_VIDEO:
-            print(f"Kein Frame erhalten, Frame-Typ: {frame_type}")
-            continue
-        
-        frame = np.frombuffer(video_data.data, dtype=np.uint8)
-        frame = frame.reshape((video_data.yres, video_data.xres, 4))
+        if frame_type == ndi.FRAME_TYPE_VIDEO:
+            frame = np.frombuffer(video_data.data, dtype=np.uint8)
+            frame = frame.reshape((video_data.yres, video_data.xres, 4))
+            last_valid_frame = frame
 
-        _, jpeg = cv2.imencode('.jpg', frame)
+        elif last_valid_frame is not None:
+            print("Kein neuer Frame")
+
+        else:
+            print("Kein Frame vorhanden")
+            time.sleep(0.1)
+            continue
+
+        _, jpeg = cv2.imencode('.jpg', last_valid_frame)
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
 
