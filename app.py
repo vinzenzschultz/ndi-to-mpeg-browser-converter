@@ -15,10 +15,12 @@ def get_ndi_sources():
     sources = ndi.find_get_current_sources(find)
     return sources
 
+
 @app.route('/')
 def index():
     sources = get_ndi_sources()
     return render_template('index.html', sources=sources)
+
 
 def ndi_receiver(source, is_ip=False):
     if not ndi.initialize():
@@ -29,42 +31,61 @@ def ndi_receiver(source, is_ip=False):
     recv = ndi.recv_create_v3(recv_create)
 
     if recv is None:
-        raise RuntimeError("NDI-Empfänger konnte nicht erstellt werden")
+        raise RuntimeError("NDI Empfänger konnte nicht erstellt werden")
 
-    if is_ip:
-        ndi.recv_connect(recv, f"NDI Source {source}")
-    else:
-        sources = get_ndi_sources()
-        selected_source = next((src for src in sources if src.ndi_name == source), None)
+    print(f"warte auf NDI Quelle: {source}")
 
-        if not selected_source:
-            print(f"Stream '{source}' nicht gefunden")
-            return
+    while True:
+        try:
+            if is_ip:
+                ndi.recv_connect(recv, f"NDI Quelle: {source}")
+                print(f"verbunden mit NDI IP {source}")
+                break
 
-        ndi.recv_connect(recv, selected_source)
+            sources = get_ndi_sources()
+            selected_source = next((src for src in sources if src.ndi_name == source), None)
+
+            if selected_source:
+                ndi.recv_connect(recv, selected_source)
+                print(f"verbunden mit NDI Quelle: {source}")
+                break
+            else:
+                print(f"NDI Quelle '{source}' nicht gefunden")
+                time.sleep(3)
+
+        except Exception as e:
+            print(f"Fehler beim Verbinden: {e}")
+            time.sleep(3)
 
     last_valid_frame = None
 
     while True:
-        frame_type, video_data, _, _ = ndi.recv_capture_v2(recv, 5000)
+        try:
+            frame_type, video_data, _, _ = ndi.recv_capture_v2(recv, 5000)
 
-        if frame_type == ndi.FRAME_TYPE_VIDEO:
-            frame = np.frombuffer(video_data.data, dtype=np.uint8)
-            frame = frame.reshape((video_data.yres, video_data.xres, 4))
-            last_valid_frame = frame
+            if frame_type == ndi.FRAME_TYPE_VIDEO:
+                frame = np.frombuffer(video_data.data, dtype=np.uint8)
+                frame = frame.reshape((video_data.yres, video_data.xres, 4))
+                last_valid_frame = frame
+                
+                ndi.recv_free_video_v2(recv, video_data)
 
-        elif last_valid_frame is not None:
-            print("Kein neuer Frame")
+            elif last_valid_frame is not None:
+                #print("kein neuen Frame erhalten")
+                pass
 
-        else:
-            print("Kein Frame vorhanden")
-            time.sleep(0.1)
-            continue
+            else:
+                #print("kein Frame vorhanden")
+                time.sleep(0.1)
+                continue
 
-        _, jpeg = cv2.imencode('.jpg', last_valid_frame)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+            _, jpeg = cv2.imencode('.jpg', last_valid_frame)
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
 
+        except Exception as e:
+            print(f"Fehler während der Stream Verarbeitung: {e}")
+            time.sleep(1)
 
 
 @app.route('/stream')
@@ -89,8 +110,6 @@ def stream():
     return Response(ndi_receiver(stream_name), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
-
-
 @app.route('/sources')
 def sources():
     sources = get_ndi_sources()
@@ -107,3 +126,4 @@ def sources():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+    
