@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NDI Stream Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: white; text-align: center; background-color: rgb(32, 32, 32); }
+        select { margin-top: 10px; padding: 5px; }
+        video-container { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <label for="stream-select">NDI-Stream:</label>
+    <select id="stream-select">
+        {% for source in sources %}
+            <option value="{{ source.ndi_name }}">{{ source.ndi_name }}</option>
+        {% endfor %}
+    </select>
+
+    <div id="video-container">
+        <img id="video-stream" src="" alt="NDI Video Stream" style="width: 77%; margin-top: 25px;">
+    </div>
+
+    <script>
+        document.getElementById("stream-select").addEventListener("change", function() {
+            let streamName = this.value;
+            document.getElementById("video-stream").src = "/stream?source=" + encodeURIComponent(streamName);
+        });
+
+        window.onload = function() {
+            let select = document.getElementById("stream-select");
+            if (select.options.length > 0) {
+                select.value = select.options[0].value;
+                document.getElementById("video-stream").src = "/stream?source=" + encodeURIComponent(select.value);
+            }
+        };
+    </script>
+</body>
+</html>
