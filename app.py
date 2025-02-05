@@ -39,7 +39,7 @@ def ndi_receiver(source, is_ip=False):
         try:
             if is_ip:
                 ndi.recv_connect(recv, f"NDI Quelle: {source}")
-                print(f"verbunden mit NDI IP {source}")
+                print(f"verbunden mit NDI IP: {source}")
                 break
 
             sources = get_ndi_sources()
@@ -126,4 +126,3 @@ def sources():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-    
