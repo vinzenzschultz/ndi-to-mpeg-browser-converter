@@ -1,1 +1,5 @@
-
+opencv-python-headless
+pynetworktables
+numpy 
+ndi-python
+Flask
